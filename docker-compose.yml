@@ -1,68 +1,95 @@
 services:
 
-  nginx:
-    image: nginx
-    container_name: nginx
+#none of those ports are set up correctly, i dont care
+#       same for some of the paths (still don't care)
+
+#backend-server
+  django:
+    image: django
+    container_name: django
     networks:
-      - inception-network
+      - tr-speedrun-network
+    expose:
+      - "8000"
+    build:
+      context: /home/ubuntu/transcendance/backend/django
+      dockerfile: Dockerfile
+    env_file: .env
+    #depends_on:
+    #  - wordpress
+    volumes:
+      - django:/var/backend/backend_server
+    #restart: unless-stopped
+
+#backend-db  
+  postgre:
+    image: postgre
+    container_name: postgre
+    expose:
+      - "5432"
+    networks:
+      - tr-speedrun-network
+    build:
+      context: /home/ubuntu/transcendance/backend/db
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - postgre:/var/backend/backend_db
+    restart: on-failure
+
+#WAF security middleware
+  middleware:
+    image: middleware
+    container_name: middleware
     ports:
-      - "443:443"
-    build:
-      context: /home/bgrulois/inception/srcs/requirements/nginx
-      dockerfile: Dockerfile
-    env_file: .env 
-    depends_on:
-      - wordpress
-    volumes:
-      - wordpress:/var/www/wordpress
-    restart: unless-stopped
-  
-  mariadb:
-    image: mariadb
-    container_name: mariadb
-    expose:
-      - "3306"
+      - "8443:8443"
     networks:
-      - inception-network
+      - tr-speedrun-network
     build:
-      context: /home/bgrulois/inception/srcs/requirements/mariadb
-      dockerfile: Dockerfile
-    env_file: .env
-    volumes:
-      - mariadb:/var/lib/mysql
-    restart: on-failure
-
-  wordpress:
-    image: wordpress
-    container_name: wordpress
-    expose:
-      - "9000"
-    networks:
-      - inception-network
-    build:
-      context: /home/bgrulois/inception/srcs/requirements/wordpress
+      context: /home/ubuntu/transcendance/middleware/
       dockerfile: Dockerfile
     env_file: .env
     depends_on:
-      - mariadb
+      - django
     volumes:
-      - wordpress:/var/www/wordpress
-    restart: on-failure
+      - middleware:/var/backend/waf
+    #restart: on-failure
 
-volumes: 
-  wordpress:
+#front (only for building npm then is turned off)
+#       may or may not need ports (don't know don't care)
+    frontend:
+      image: frontend
+      container_name: frontend
+      ports:
+        - "8080:8080"
+      networks:
+        - tr-speedrun-network
+      build:
+        context: /home/ubuntu/transcendance/frontend/
+        dockerfile: Dockerfile
+      volumes:
+       - frontend:/usr/src/app/
+
+volumes:
+  django:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/home/bgrulois/data/wordpress'
-  mariadb:
+      device: '/home/ubuntu/data/backend_django'
+  postgre:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/home/bgrulois/data/mariadb'
+      device: '/home/ubuntu/data/backend_db'
+  middleware:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/ubuntu/data/waf_rules'
 
 networks:
-  inception-network:
+  tr-speedrun-network:
     driver: bridge
