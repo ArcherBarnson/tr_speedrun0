@@ -15,11 +15,15 @@ services:
       context: /home/ubuntu/transcendance/backend/django
       dockerfile: Dockerfile
     env_file: .env
-    #depends_on:
-    #  - wordpress
+    depends_on:
+      - postgre
+      - vault
     volumes:
-      - django:/var/backend/backend_server
-    #restart: unless-stopped
+      - django:/var/www/django/static/
+      - django:/var/www/django/media/
+      - postgre:/var/lib/postgresql/data/
+      - vault:/etc/vault
+    restart: on-failure
 
 #backend-db  
   postgre:
@@ -34,8 +38,25 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     volumes:
-      - postgre:/var/backend/backend_db
+      - postgre:/var/lib/postgresql/data/
     restart: on-failure
+
+#backend-vault (hashicorp)
+  vault:
+    image: vault
+    container_name: vault
+    expose:
+      - "8200"
+    networks:
+      - tr-speedrun-network
+    build:
+      context: /home/ubuntu/transcendance/backend/vault
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - vault:/etc/vault.d/
+    restart: unless-stopped
+
 
 #WAF security middleware
   middleware:
@@ -52,8 +73,9 @@ services:
     depends_on:
       - django
     volumes:
-      - middleware:/var/backend/waf
-    #restart: on-failure
+      - middleware:/etc/conf/
+      - middleware:/var/log/
+    restart: unless-stopped
 
 #front (only for building npm then is turned off)
 #       may or may not need ports (don't know don't care)
@@ -67,28 +89,18 @@ services:
       build:
         context: /home/ubuntu/transcendance/frontend/
         dockerfile: Dockerfile
-      volumes:
-       - frontend:/usr/src/app/
+      depends_on:
+        - django
+        - middleware
+        - postgre
+        - vault
+      restart: on-failure
 
 volumes:
-  django:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/home/ubuntu/data/backend_django'
-  postgre:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/home/ubuntu/data/backend_db'
-  middleware:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/home/ubuntu/data/waf_rules'
+  - django:
+  - postgre:
+  - vault:
+  - middleware:
 
 networks:
   tr-speedrun-network:
